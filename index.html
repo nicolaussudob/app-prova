@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="it" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Decisione Rapida - Ruota, Dadi e Moneta</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti per l'effetto coriandoli -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Tone.js per effetti sonori generati via codice (nessun file esterno) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        darkBg: '#09090b',
+                        cardBg: '#18181b',
+                        neonPurple: '#a855f7',
+                        neonCyan: '#06b6d4',
+                        neonPink: '#ec4899'
+                    },
+                    boxShadow: {
+                        'neon-purple': '0 0 20px rgba(168, 85, 247, 0.5)',
+                        'neon-cyan': '0 0 20px rgba(6, 182, 212, 0.5)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Stili personalizzati per animazioni 3D e scrollbar */
+        body {
+            background-color: #09090b;
+            color: #ffffff;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
+        }
+
+        /* Animazione 3D Moneta */
+        .coin-container {
+            perspective: 1000px;
+        }
+        .coin {
+            width: 140px;
+            height: 140px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .coin-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            box-shadow: inset 0 0 15px rgba(255,255,255,0.4), 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .coin-front {
+            background: linear-gradient(135deg, #06b6d4, #3b82f6);
+            border: 4px solid #67e8f9;
+        }
+        .coin-back {
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            border: 4px solid #f0abfc;
+            transform: rotateY(180deg);
+        }
+
+        /* Animazione Dado */
+        @keyframes shakeDice {
+            0% { transform: rotate(0deg) scale(1); }
+            20% { transform: rotate(-25deg) scale(1.1); }
+            40% { transform: rotate(25deg) scale(1.1); }
+            60% { transform: rotate(-15deg) scale(1.05); }
+            80% { transform: rotate(15deg) scale(1.05); }
+            100% { transform: rotate(0deg) scale(1); }
+        }
+        .animate-dice {
+            animation: shakeDice 0.6s ease-in-out;
+        }
+
+        /* Puntatore della ruota */
+        .wheel-pointer {
+            width: 0; 
+            height: 0; 
+            border-left: 16px solid transparent;
+            border-right: 16px solid transparent;
+            border-top: 28px solid #ffffff;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.8));
+            z-index: 20;
+        }
+
+        /* Nascondi scrollbar per liste pulite */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-[100dvh] max-w-md mx-auto bg-darkBg border-x border-zinc-800/60 shadow-2xl overflow-hidden select-none">
+
+    <!-- Header App -->
+    <header class="pt-5 pb-3 px-5 flex items-center justify-between bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80 z-10">
+        <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-neonPurple to-neonCyan flex items-center justify-center shadow-neon-purple">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+            </div>
+            <div>
+                <h1 class="font-black text-lg tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">Decisione Rapida</h1>
+                <p class="text-[11px] text-zinc-400 font-medium">Lascia scegliere al destino</p>
+            </div>
+        </div>
+        <!-- Pulsante Audio Toggle -->
+        <button id="soundToggle" class="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-neonCyan hover:bg-zinc-800 transition active:scale-95" title="Attiva/Disattiva Suoni">
+            <svg id="soundIconOn" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+            </svg>
+            <svg id="soundIconOff" class="w-5 h-5 hidden text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
+            </svg>
+        </button>
+    </header>
+
+    <!-- Area Contenuto Principale (Scrollabile) -->
+    <main class="flex-1 overflow-y-auto no-scrollbar p-5 pb-24 relative">
+
+        <!-- ========================================== -->
+        <!-- SEZIONE 1: RUOTA DELLE SCELTE              -->
+        <!-- ========================================== -->
+        <section id="tab-wheel" class="space-y-5 animate-fade-in">
+            
+            <!-- Contenitore Ruota -->
+            <div class="relative flex flex-col items-center justify-center pt-2 pb-1">
+                <!-- Puntatore in alto -->
+                <div class="wheel-pointer -mb-3 relative"></div>
+                
+                <!-- Canvas della Ruota -->
+                <div class="relative w-64 h-64 sm:w-72 sm:h-72 rounded-full p-1.5 bg-gradient-to-tr from-neonPurple via-neonPink to-neonCyan shadow-neon-purple">
+                    <canvas id="wheelCanvas" class="w-full h-full rounded-full bg-zinc-900"></canvas>
+                    
+                    <!-- Bottone Centrale "GIRA" -->
+                    <button id="spinBtn" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-zinc-950 border-4 border-white text-white font-black text-xs tracking-wider shadow-xl hover:scale-105 active:scale-95 transition flex items-center justify-center z-10">
+                        GIRA
+                    </button>
+                </div>
+            </div>
+
+            <!-- Box Risultato Ruota -->
+            <div id="wheelResultBox" class="hidden bg-zinc-900/90 border border-neonPurple/50 rounded-2xl p-4 text-center shadow-neon-purple transition-all">
+                <p class="text-xs uppercase tracking-widest text-neonCyan font-bold mb-1">Il destino ha scelto:</p>
+                <p id="wheelResultText" class="text-2xl font-black text-white">Pizza 🍕</p>
+            </div>
+
+            <!-- Gestione Opzioni -->
+            <div class="bg-cardBg border border-zinc-800 rounded-2xl p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-sm font-bold text-zinc-200">Le tue opzioni (<span id="optionsCount">6</span>)</h2>
+                    <button id="resetOptionsBtn" class="text-xs text-zinc-400 hover:text-neonCyan transition">Ripristina default</button>
+                </div>
+
+                <!-- Form Aggiungi Opzione -->
+                <form id="addOptionForm" class="flex gap-2">
+                    <input type="text" id="newOptionInput" placeholder="Es. Gelato, Cinema..." maxlength="22"
+                        class="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-neonPurple transition">
+                    <button type="submit" class="bg-neonPurple hover:bg-purple-600 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition active:scale-95 shadow-md">
+                        +
+                    </button>
+                </form>
+
+                <!-- Lista Tag Opzioni -->
+                <div id="optionsList" class="flex flex-wrap gap-2 pt-1 max-h-36 overflow-y-auto no-scrollbar">
+                    <!-- Generato via JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SEZIONE 2: DADI E MONETA                   -->
+        <!-- ========================================== -->
+        <section id="tab-dice" class="hidden space-y-6">
+            
+            <!-- Card Lancio Moneta -->
+            <div class="bg-cardBg border border-zinc-800 rounded-3xl p-5 flex flex-col items-center text-center space-y-4">
+                <div class="w-full flex justify-between items-center">
+                    <span class="text-xs font-bold uppercase tracking-wider text-neonCyan bg-cyan-950/50 px-3 py-1 rounded-full border border-cyan-800/50">50% / 50%</span>
+                    <h2 class="text-base font-bold text-zinc-200">Testa o Croce</h2>
+                </div>
+
+                <!-- Moneta 3D -->
+                <div class="coin-container py-3">
+                    <div id="coin" class="coin">
+                        <div class="coin-face coin-front">
+                            <span class="text-3xl mb-1">👑</span>
+                            <span class="text-sm tracking-widest uppercase">TESTA</span>
+                        </div>
+                        <div class="coin-face coin-back">
+                            <span class="text-3xl mb-1">⚡</span>
+                            <span class="text-sm tracking-widest uppercase">CROCE</span>
+                        </div>
+                    </div>
+                </div>
+
+                <p id="coinResultText" class="text-sm font-semibold text-zinc-400 h-5">Tocca il pulsante per lanciare</p>
+
+                <button id="flipCoinBtn" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-neonCyan to-blue-600 font-bold text-white shadow-neon-cyan hover:opacity-95 active:scale-98 transition">
+                    Lancia la Moneta
+                </button>
+            </div>
+
+            <!-- Card Lancio Dado -->
+            <div class="bg-cardBg border border-zinc-800 rounded-3xl p-5 flex flex-col items-center text-center space-y-4">
+                <div class="w-full flex justify-between items-center">
+                    <span class="text-xs font-bold uppercase tracking-wider text-neonPurple bg-purple-950/50 px-3 py-1 rounded-full border border-purple-800/50">D6 Classico</span>
+                    <h2 class="text-base font-bold text-zinc-200">Lancia il Dado</h2>
+                </div>
+
+                <!-- Rappresentazione Visiva Dado -->
+                <div id="diceBox" class="w-28 h-28 rounded-3xl bg-zinc-900 border-2 border-neonPurple/70 shadow-neon-purple flex items-center justify-center my-2">
+                    <!-- SVG Puntini Dado -->
+                    <div id="diceFace" class="grid grid-cols-3 grid-rows-3 gap-2 p-4 w-full h-full">
+                        <!-- Generato dinamicamente -->
+                    </div>
+                </div>
+
+                <p id="diceResultText" class="text-sm font-semibold text-zinc-400 h-5">Pronto al lancio</p>
+
+                <button id="rollDiceBtn" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-neonPurple to-neonPink font-bold text-white shadow-neon-purple hover:opacity-95 active:scale-98 transition">
+                    Tira il Dado
+                </button>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SEZIONE 3: SCEGLI UN NUMERO                -->
+        <!-- ========================================== -->
+        <section id="tab-number" class="hidden space-y-6">
+            <div class="bg-cardBg border border-zinc-800 rounded-3xl p-6 space-y-6 text-center">
+                <div>
+                    <h2 class="text-xl font-black text-white">Generatore Numeri</h2>
+                    <p class="text-xs text-zinc-400 mt-1">Imposta l'intervallo ed estrai un numero casuale</p>
+                </div>
+
+                <!-- Display Numero Estratto -->
+                <div class="py-6 px-4 rounded-3xl bg-zinc-950 border border-zinc-800 relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-tr from-neonPurple/10 to-neonCyan/10"></div>
+                    <span id="randomNumberDisplay" class="relative text-6xl font-black bg-gradient-to-r from-neonCyan via-white to-neonPurple bg-clip-text text-transparent">
+                        ?
+                    </span>
+                </div>
+
+                <!-- Input Min e Max -->
+                <div class="grid grid-cols-2 gap-4 text-left">
+                    <div class="bg-zinc-900/80 p-3.5 rounded-2xl border border-zinc-800">
+                        <label for="minNum" class="block text-[11px] uppercase font-bold text-zinc-400 mb-1">Minimo</label>
+                        <input type="number" id="minNum" value="1" class="w-full bg-transparent text-xl font-bold text-white focus:outline-none">
+                    </div>
+                    <div class="bg-zinc-900/80 p-3.5 rounded-2xl border border-zinc-800">
+                        <label for="maxNum" class="block text-[11px] uppercase font-bold text-zinc-400 mb-1">Massimo</label>
+                        <input type="number" id="maxNum" value="100" class="w-full bg-transparent text-xl font-bold text-white focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- Messaggio Errore Validazione (Nascosto di default) -->
+                <p id="numberErrorMsg" class="hidden text-xs text-rose-400 font-semibold">Il minimo deve essere inferiore al massimo!</p>
+
+                <!-- Bottone Genera -->
+                <button id="generateNumBtn" class="w-full py-4 rounded-2xl bg-gradient-to-r from-neonPurple via-neonPink to-neonCyan font-black text-white tracking-wide shadow-neon-purple hover:opacity-95 active:scale-98 transition">
+                    ESTRAI NUMERO
+                </button>
+
+                <!-- Cronologia ultimi 5 numeri -->
+                <div class="pt-2 border-t border-zinc-800/80">
+                    <p class="text-xs text-zinc-500 mb-2">Ultimi estratti:</p>
+                    <div id="numberHistory" class="flex justify-center gap-2 min-h-[28px]">
+                        <span class="text-xs text-zinc-600 italic">Nessuna estrazione</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Bottom Navigation Bar (Stile App Nativa) -->
+    <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-zinc-950/90 backdrop-blur-lg border-t border-zinc-800/90 px-4 py-2 flex justify-around items-center z-30">
+        
+        <button data-target="tab-wheel" class="nav-btn active flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl text-neonPurple transition">
+            <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path>
+            </svg>
+            <span class="text-[11px] font-bold">Ruota</span>
+        </button>
+
+        <button data-target="tab-dice" class="nav-btn flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl text-zinc-500 hover:text-zinc-300 transition">
+            <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+            </svg>
+            <span class="text-[11px] font-bold">Dadi & Moneta</span>
+        </button>
+
+        <button data-target="tab-number" class="nav-btn flex flex-col items-center justify-center py-1.5 px-4 rounded-2xl text-zinc-500 hover:text-zinc-300 transition">
+            <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path>
+            </svg>
+            <span class="text-[11px] font-bold">Numeri</span>
+        </button>
+
+    </nav>
+
+    <!-- Notifica Toast Personalizzata (Sostituisce alert()) -->
+    <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-zinc-800 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-lg border border-zinc-700 opacity-0 pointer-events-none transition-opacity duration-300 z-50">
+        Messaggio
+    </div>
+
+    <!-- ========================================== -->
+    <!-- LOGICA JAVASCRIPT                          -->
+    <!-- ========================================== -->
+    <script>
+        // --- GESTIONE AUDIO CON TONE.JS ---
+        let soundEnabled = true;
+        let synth = null;
+
+        function initAudio() {
+            if (!synth && typeof Tone !== 'undefined') {
+                synth = new Tone.PolySynth(Tone.Synth).toDestination();
+                synth.volume.value = -8;
+            }
+        }
+
+        function playTickSound() {
+            if (!soundEnabled) return;
+            initAudio();
+            if (Tone.context.state !== 'running') Tone.start();
+            if (synth) synth.triggerAttackRelease("C5", "32n");
+        }
+
+        function playWinSound() {
+            if (!soundEnabled) return;
+            initAudio();
+            if (Tone.context.state !== 'running') Tone.start();
+            if (synth) {
+                const now = Tone.now();
+                synth.triggerAttackRelease("C5", "16n", now);
+                synth.triggerAttackRelease("E5", "16n", now + 0.1);
+                synth.triggerAttackRelease("G5", "16n", now + 0.2);
+                synth.triggerAttackRelease("C6", "8n", now + 0.3);
+            }
+        }
+
+        document.getElementById('soundToggle').addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            document.getElementById('soundIconOn').classList.toggle('hidden', !soundEnabled);
+            document.getElementById('soundIconOff').classList.toggle('hidden', soundEnabled);
+            showToast(soundEnabled ? "Suoni attivati 🔊" : "Suoni disattivati 🔇");
+        });
+
+        // --- FUNZIONE TOAST (Sostituto elegante di alert) ---
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.remove('opacity-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+            }, 2200);
+        }
+
+        // --- NAVIGAZIONE TRA SCHEDE (BOTTOM BAR) ---
+        const navButtons = document.querySelectorAll('.nav-btn');
+        const sections = ['tab-wheel', 'tab-dice', 'tab-number'];
+
+        navButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetId = btn.getAttribute('data-target');
+                
+                // Aggiorna sezioni visibili
+                sections.forEach(sec => {
+                    document.getElementById(sec).classList.toggle('hidden', sec !== targetId);
+                });
+
+                // Aggiorna stile bottoni
+                navButtons.forEach(b => {
+                    b.classList.remove('text-neonPurple', 'active');
+                    b.classList.add('text-zinc-500');
+                });
+                btn.classList.remove('text-zinc-500');
+                btn.classList.add('text-neonPurple', 'active');
+
+                // Ridisegna ruota se torniamo sulla scheda ruota
+                if (targetId === 'tab-wheel') drawWheel();
+            });
+        });
+
+        // ==========================================
+        // 1. LOGICA RUOTA DELLE SCELTE
+        // ==========================================
+        const defaultOptions = ['Pizza 🍕', 'Sushi 🍣', 'Hamburger 🍔', 'Pasta 🍝', 'Poke 🥗', 'Tacos 🌮'];
+        let options = [...defaultOptions];
+        const wheelColors = ['#9333ea', '#0891b2', '#db2777', '#4f46e5', '#0d9488', '#7c3aed', '#e11d48', '#2563eb'];
+        
+        const canvas = document.getElementById('wheelCanvas');
+        const ctx = canvas.getContext('2d');
+        let currentAngle = 0;
+        let isSpinning = false;
+
+        // Adatta risoluzione canvas per schermi Retina / Mobile
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            drawWheel();
+        }
+
+        function drawWheel() {
+            const rect = canvas.getBoundingClientRect();
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            const radius = Math.min(centerX, centerY);
+
+            ctx.clearRect(0, 0, rect.width, rect.height);
+
+            if (options.length === 0) return;
+
+            const arcSize = (2 * Math.PI) / options.length;
+
+            options.forEach((opt, i) => {
+                const angle = currentAngle + i * arcSize;
+                
+                // Disegna spicchio
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, angle, angle + arcSize);
+                ctx.closePath();
+                ctx.fillStyle = wheelColors[i % wheelColors.length];
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#09090b';
+                ctx.stroke();
+
+                // Disegna testo
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(angle + arcSize / 2);
+                ctx.textAlign = 'right';
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 13px Inter, sans-serif';
+                
+                // Tronca testo se troppo lungo
+                const label = opt.length > 14 ? opt.substring(0, 13) + '…' : opt;
+                ctx.fillText(label, radius - 18, 5);
+                ctx.restore();
+            });
+        }
+
+        // Aggiorna UI lista opzioni
+        function renderOptionsList() {
+            const listEl = document.getElementById('optionsList');
+            document.getElementById('optionsCount').textContent = options.length;
+            listEl.innerHTML = '';
+
+            options.forEach((opt, index) => {
+                const tag = document.createElement('div');
+                tag.className = 'flex items-center gap-1.5 bg-zinc-900 border border-zinc-700/80 px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-200';
+                tag.innerHTML = `
+                    <span>${opt}</span>
+                    <button type="button" class="text-zinc-500 hover:text-rose-400 font-bold ml-1" data-index="${index}">&times;</button>
+                `;
+                tag.querySelector('button').addEventListener('click', () => {
+                    if (isSpinning) return;
+                    if (options.length <= 2) {
+                        showToast("Servono almeno 2 opzioni!");
+                        return;
+                    }
+                    options.splice(index, 1);
+                    renderOptionsList();
+                    drawWheel();
+                });
+                listEl.appendChild(tag);
+            });
+        }
+
+        // Aggiungi nuova opzione
+        document.getElementById('addOptionForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (isSpinning) return;
+            const input = document.getElementById('newOptionInput');
+            const val = input.value.trim();
+            if (!val) return;
+            if (options.length >= 12) {
+                showToast("Massimo 12 opzioni consentite!");
+                return;
+            }
+            options.push(val);
+            input.value = '';
+            renderOptionsList();
+            drawWheel();
+        });
+
+        // Ripristina opzioni default
+        document.getElementById('resetOptionsBtn').addEventListener('click', () => {
+            if (isSpinning) return;
+            options = [...defaultOptions];
+            document.getElementById('wheelResultBox').classList.add('hidden');
+            renderOptionsList();
+            drawWheel();
+            showToast("Opzioni ripristinate");
+        });
+
+        // Animazione rotazione ruota
+        document.getElementById('spinBtn').addEventListener('click', () => {
+            if (isSpinning || options.length < 2) return;
+            isSpinning = true;
+            document.getElementById('wheelResultBox').classList.add('hidden');
+
+            const spinDuration = 4000; // 4 secondi
+            const extraSpins = (5 + Math.random() * 5) * 2 * Math.PI; // Da 5 a 10 giri completi
+            const startAngle = currentAngle;
+            const targetAngle = startAngle + extraSpins;
+            const startTime = performance.now();
+            let lastTickSlice = -1;
+
+            function animateSpin(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / spinDuration, 1);
+                
+                // Easing cubic-out per rallentamento naturale
+                const easeOut = 1 - Math.pow(1 - progress, 3);
+                currentAngle = startAngle + (targetAngle - startAngle) * easeOut;
+
+                drawWheel();
+
+                // Suono "tic" ad ogni cambio spicchio
+                const arcSize = (2 * Math.PI) / options.length;
+                const currentSlice = Math.floor((currentAngle % (2 * Math.PI)) / arcSize);
+                if (currentSlice !== lastTickSlice) {
+                    playTickSound();
+                    lastTickSlice = currentSlice;
+                }
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateSpin);
+                } else {
+                    isSpinning = false;
+                    determineWinner();
+                }
+            }
+
+            requestAnimationFrame(animateSpin);
+        });
+
+        function determineWinner() {
+            const arcSize = (2 * Math.PI) / options.length;
+            // Il puntatore è in alto (a -PI/2 o 3*PI/2)
+            const pointerAngle = (3 * Math.PI) / 2;
+            const normalizedAngle = (pointerAngle - (currentAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+            const winningIndex = Math.floor(normalizedAngle / arcSize);
+            const winner = options[winningIndex];
+
+            // Mostra risultato
+            const resBox = document.getElementById('wheelResultBox');
+            document.getElementById('wheelResultText').textContent = winner;
+            resBox.classList.remove('hidden');
+
+            // Suono vittoria + Coriandoli
+            playWinSound();
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 70,
+                    spread: 60,
+                    origin: { y: 0.6 },
+                    colors: ['#a855f7', '#06b6d4', '#ec4899', '#ffffff']
+                });
+            }
+        }
+
+        // ==========================================
+        // 2. LOGICA MONETA E DADO
+        // ==========================================
+        let coinRotation = 0;
+        let isFlipping = false;
+
+        document.getElementById('flipCoinBtn').addEventListener('click', () => {
+            if (isFlipping) return;
+            isFlipping = true;
+            const coinEl = document.getElementById('coin');
+            const resText = document.getElementById('coinResultText');
+            
+            resText.textContent = "Lancio in corso...";
+            resText.className = "text-sm font-semibold text-neonCyan h-5 animate-pulse";
+
+            const isHeads = Math.random() < 0.5;
+            // Aggiunge almeno 5 giri completi (1800 gradi)
+            coinRotation += 1800 + (isHeads ? (360 - (coinRotation % 360)) : (180 - (coinRotation % 360)));
+            
+            coinEl.style.transform = `rotateY(${coinRotation}deg)`;
+            playTickSound();
+
+            setTimeout(() => {
+                isFlipping = false;
+                resText.className = "text-base font-black text-white h-5";
+                resText.textContent = isHeads ? "È uscito TESTA! 👑" : "È uscito CROCE! ⚡";
+                playWinSound();
+            }, 2000);
+        });
+
+        // Disegna i puntini del dado (1-6)
+        const diceFaceEl = document.getElementById('diceFace');
+        const dotPositions = {
+            1: [4],
+            2: [0, 8],
+            3: [0, 4, 8],
+            4: [0, 2, 6, 8],
+            5: [0, 2, 4, 6, 8],
+            6: [0, 2, 3, 5, 6, 8]
+        };
+
+        function renderDiceFace(number) {
+            diceFaceEl.innerHTML = '';
+            const activeDots = dotPositions[number] || [4];
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'flex items-center justify-center';
+                if (activeDots.includes(i)) {
+                    cell.innerHTML = `<div class="w-4 h-4 rounded-full bg-white shadow-[0_0_8px_#a855f7]"></div>`;
+                }
+                diceFaceEl.appendChild(cell);
+            }
+        }
+
+        let isRolling = false;
+        document.getElementById('rollDiceBtn').addEventListener('click', () => {
+            if (isRolling) return;
+            isRolling = true;
+            const diceBox = document.getElementById('diceBox');
+            const resText = document.getElementById('diceResultText');
+
+            diceBox.classList.remove('animate-dice');
+            void diceBox.offsetWidth; // Trigger reflow
+            diceBox.classList.add('animate-dice');
+            
+            resText.textContent = "Il dado rotola...";
+            resText.className = "text-sm font-semibold text-neonPurple h-5";
+
+            // Cambia facce rapidamente durante l'animazione
+            let rollCount = 0;
+            const interval = setInterval(() => {
+                renderDiceFace(Math.floor(Math.random() * 6) + 1);
+                playTickSound();
+                rollCount++;
+                if (rollCount > 8) {
+                    clearInterval(interval);
+                    const finalNum = Math.floor(Math.random() * 6) + 1;
+                    renderDiceFace(finalNum);
+                    resText.className = "text-base font-black text-white h-5";
+                    resText.textContent = `Hai fatto ${finalNum}! 🎲`;
+                    playWinSound();
+                    isRolling = false;
+                }
+            }, 65);
+        });
+
+        // ==========================================
+        // 3. LOGICA GENERATORE NUMERI
+        // ==========================================
+        const numHistory = [];
+        document.getElementById('generateNumBtn').addEventListener('click', () => {
+            const minInput = parseInt(document.getElementById('minNum').value, 10);
+            const maxInput = parseInt(document.getElementById('maxNum').value, 10);
+            const errorMsg = document.getElementById('numberErrorMsg');
+            const display = document.getElementById('randomNumberDisplay');
+
+            if (isNaN(minInput) || isNaN(maxInput) || minInput >= maxInput) {
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+            errorMsg.classList.add('hidden');
+
+            // Effetto scorrimento numeri veloce
+            let steps = 0;
+            const totalSteps = 12;
+            const timer = setInterval(() => {
+                const tempNum = Math.floor(Math.random() * (maxInput - minInput + 1)) + minInput;
+                display.textContent = tempNum;
+                playTickSound();
+                steps++;
+
+                if (steps >= totalSteps) {
+                    clearInterval(timer);
+                    const finalNumber = Math.floor(Math.random() * (maxInput - minInput + 1)) + minInput;
+                    display.textContent = finalNumber;
+                    playWinSound();
+
+                    // Aggiorna cronologia
+                    numHistory.unshift(finalNumber);
+                    if (numHistory.length > 5) numHistory.pop();
+                    
+                    const historyEl = document.getElementById('numberHistory');
+                    historyEl.innerHTML = numHistory.map(n => 
+                        `<span class="px-2.5 py-0.5 rounded-lg bg-zinc-800 border border-zinc-700 text-xs font-bold text-neonCyan">${n}</span>`
+                    ).join('');
+                }
+            }, 45);
+        });
+
+        // --- INIZIALIZZAZIONE AL CARICAMENTO ---
+        window.addEventListener('load', () => {
+            renderOptionsList();
+            resizeCanvas();
+            renderDiceFace(6); // Faccia iniziale dado
+        });
+
+        window.addEventListener('resize', () => {
+            if (!document.getElementById('tab-wheel').classList.contains('hidden')) {
+                resizeCanvas();
+            }
+        });
+    </script>
+</body>
+</html>
